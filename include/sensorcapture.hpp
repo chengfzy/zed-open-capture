@@ -23,10 +23,11 @@
 
 #include "defines.hpp"
 
-#include <thread>
-#include <vector>
+#include <condition_variable>
 #include <map>
 #include <mutex>
+#include <thread>
+#include <vector>
 
 #ifdef SENSORS_MOD_AVAILABLE
 
@@ -178,7 +179,17 @@ public:
      * \param timeout_usec data grabbing timeout in milliseconds.
      * \return returns a reference to the last received data.
      */
-    const data::Imu& getLastIMUData(uint64_t timeout_usec=1500);
+    const data::Imu& getLastIMUData(uint64_t timeout_usec = 1500);
+
+    /**
+     * @brief Get the new reviced IMU data
+     *
+     * @return The received IMU data
+     *
+     * @note The different between getLastIMUData() is this function will not sleep in current thread, and use condition
+     * variable to wake up it.
+     */
+    data::Imu getNewImuData();
 
     /*!
      * \brief Get the last received Magnetometer data
@@ -279,6 +290,7 @@ private:
     std::mutex mMagMutex;               //!< Mutex for safe access to MAG data buffer
     std::mutex mEnvMutex;               //!< Mutex for safe access to ENV data buffer
     std::mutex mCamTempMutex;           //!< Mutex for safe access to CAM_TEMP data buffer
+    std::condition_variable mImuReadyCv;  // condition variable to indict the IMU data is ready
 
     uint64_t mStartSysTs=0;             //!< Initial System Timestamp, to calculate differences [nsec]
     uint64_t mLastMcuTs=0;              //!< MCU Timestamp of the previous data, to calculate relative timestamps [nsec]

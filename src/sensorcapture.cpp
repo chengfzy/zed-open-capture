@@ -457,25 +457,25 @@ void SensorCapture::grabThreadFunc()
         // ----> IMU data
         mIMUMutex.lock();
         mLastIMUData.sync = data->frame_sync;
-        mLastIMUData.valid = (data->imu_not_valid!=1)?(data::Imu::NEW_VAL):(data::Imu::OLD_VAL);
+        mLastIMUData.valid = (data->imu_not_valid != 1) ? (data::Imu::NEW_VAL) : (data::Imu::OLD_VAL);
         mLastIMUData.timestamp = current_data_ts;
-        mLastIMUData.aX = data->aX*ACC_SCALE;
-        mLastIMUData.aY = data->aY*ACC_SCALE;
-        mLastIMUData.aZ = data->aZ*ACC_SCALE;
-        mLastIMUData.gX = data->gX*GYRO_SCALE;
-        mLastIMUData.gY = data->gY*GYRO_SCALE;
-        mLastIMUData.gZ = data->gZ*GYRO_SCALE;
-        mLastIMUData.temp = data->imu_temp*TEMP_SCALE;
+        mLastIMUData.aX = data->aX * ACC_SCALE;
+        mLastIMUData.aY = data->aY * ACC_SCALE;
+        mLastIMUData.aZ = data->aZ * ACC_SCALE;
+        mLastIMUData.gX = data->gX * GYRO_SCALE;
+        mLastIMUData.gY = data->gY * GYRO_SCALE;
+        mLastIMUData.gZ = data->gZ * GYRO_SCALE;
+        mLastIMUData.temp = data->imu_temp * TEMP_SCALE;
         mNewIMUData = true;
+        mImuReadyCv.notify_one();
         mIMUMutex.unlock();
 
-        //std::string msg = std::to_string(mLastMAGData.timestamp);
-        //INFO_OUT(msg);
+        // std::string msg = std::to_string(mLastMAGData.timestamp);
+        // INFO_OUT(msg);
         // <---- IMU data
 
         // ----> Magnetometer data
-        if(data->mag_valid == data::Magnetometer::NEW_VAL)
-        {
+        if (data->mag_valid == data::Magnetometer::NEW_VAL) {
             mMagMutex.lock();
             mLastMagData.valid = data::Magnetometer::NEW_VAL;
             mLastMagData.timestamp = current_data_ts;
@@ -487,9 +487,7 @@ void SensorCapture::grabThreadFunc()
 
             //std::string msg = std::to_string(mLastMAGData.timestamp);
             //INFO_OUT(msg);
-        }
-        else
-        {
+        } else {
             if(data->mag_valid==0)
                 mLastMagData.valid = data::Magnetometer::NOT_PRESENT;
             else if(data->mag_valid==1)
@@ -802,6 +800,15 @@ const data::Imu& SensorCapture::getLastIMUData(uint64_t timeout_usec)
     const std::lock_guard<std::mutex> lock(mIMUMutex);
     mNewIMUData = false;
     return mLastIMUData;
+}
+
+// Get the new reviced IMU data
+data::Imu SensorCapture::getNewImuData() {
+    // wait new data
+    std::unique_lock<std::mutex> lock(mIMUMutex);
+    mImuReadyCv.wait(lock, [&]() { return mNewIMUData; });
+    mNewIMUData = false;
+    return data::Imu(mLastIMUData);
 }
 
 const data::Magnetometer& SensorCapture::getLastMagnetometerData(uint64_t timeout_usec)
