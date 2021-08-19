@@ -82,7 +82,15 @@ if(BUILD_SENSORS)
     message("* Sensors module available")
     add_definitions(-DSENSORS_MOD_AVAILABLE)
 
-    find_package(HIDAPI REQUIRED)
+    # find hidapi lib
+    set(SYS_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR})
+    message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
+    if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86*")
+        find_package(HIDAPI REQUIRED libusb)
+    elseif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm*")
+        find_package(HIDAPI REQUIRED hidraw)
+    endif()
+
     message(STATUS "libhidapi: include dir at ${HIDAPI_INCLUDE_DIRS}")
     message(STATUS "libhidapi: libraries at ${HIDAPI_LIBRARIES}")
     include_directories(${HIDAPI_INCLUDE_DIRS})
