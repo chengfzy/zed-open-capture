@@ -21,11 +21,13 @@
 #ifndef VIDEOCAPTURE_HPP
 #define VIDEOCAPTURE_HPP
 
-#include "defines.hpp"
-#include <thread>
-#include <mutex>
-#include <fstream>      // std::ofstream
+#include <condition_variable>
+#include <fstream>  // std::ofstream
 #include <iomanip>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include "defines.hpp"
 
 #define LOG_SEP ","
 
@@ -56,6 +58,19 @@ struct SL_OC_EXPORT Frame
     uint16_t width = 0;             //!< Frame width
     uint16_t height = 0;            //!< Frame height
     uint8_t channels = 0;           //!< Number of channels per pixel
+};
+
+/**
+ * @brief Image buffer, different to Frame is use vector<> to hold the data
+ *
+ */
+struct SL_OC_EXPORT ImageFrame {
+    uint64_t frame_id = 0;      //!< Increasing index of frames
+    uint64_t timestamp = 0;     //!< Timestamp in nanoseconds
+    std::vector<uint8_t> data;  //!< Frame data in YUV 4:2:2 format
+    uint16_t width = 0;         //!< Frame width
+    uint16_t height = 0;        //!< Frame height
+    uint8_t channels = 0;       //!< Number of channels per pixel
 };
 
 /*!
@@ -96,6 +111,13 @@ public:
      * Images must then be converted to RGB for proper display and will not be rectified.
      */
     const Frame& getLastFrame(uint64_t timeout_msec=100);
+
+    /**
+     * @brief Get the received image frame data
+     *
+     * @return  Received image frame data
+     */
+    std::deque<std::shared_ptr<ImageFrame>> getImageFrames();
 
     /*!
      * \brief Get the size of the camera frame
@@ -485,6 +507,10 @@ private:
     int mFps=0;                         //!< Frames per seconds
 
     SL_DEVICE mCameraModel = SL_DEVICE::NONE; //!< The camera model
+
+    std::deque<std::shared_ptr<ImageFrame>> imageFrames_;  // received new frames
+    uint64_t frameId_ = 0;                                 // frame index
+    std::condition_variable frameReadyCv_;                 // new frame is ready
 
     Frame mLastFrame;                   //!< Last grabbed frame
     uint8_t mBufCount = 2;              //!< UVC buffer count

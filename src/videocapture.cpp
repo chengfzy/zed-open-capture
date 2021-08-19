@@ -189,6 +189,9 @@ void VideoCapture::reset()
         mLastFrame.data = nullptr;
     }
 
+    // clear old frames
+    imageFrames_.clear();
+
     if( mParams.verbose && mInitialized)
     {
         std::string msg = "Device closed";
@@ -821,47 +824,35 @@ void VideoCapture::grabThreadFunc()
             rel_ts *= 1000;
 
             mBufMutex.lock();
-            if (mLastFrame.data != nullptr && mWidth != 0 && mHeight != 0 && mBuffers[mCurrentIndex].start != nullptr)
-            {
-                mLastFrame.frame_id++;
-                memcpy(mLastFrame.data, (unsigned char*) mBuffers[mCurrentIndex].start, mBuffers[mCurrentIndex].length);
-                mLastFrame.timestamp = mStartTs + rel_ts;
+            if (mWidth != 0 && mHeight != 0 && mBuffers[mCurrentIndex].start != nullptr) {
+                // assign frame
+                auto frame = std::make_shared<ImageFrame>();
+                frame->frame_id = frameId_++;
+                frame->width = mWidth;
+                frame->height = mHeight;
+                frame->channels = mChannels;
+                frame->timestamp = mStartTs + rel_ts;
+                frame->data.resize(mBuffers[mCurrentIndex].length);
+                memcpy(frame->data.data(), (unsigned char*)mBuffers[mCurrentIndex].start,
+                       mBuffers[mCurrentIndex].length);
+                frameId_++;
+                // pop old data to keep queue size
+                if (imageFrames_.size() > 100) {
+                    imageFrames_.pop_front();
+                }
+                imageFrames_.emplace_back(frame);
 
-                //                static uint64_t last_ts=0;
-                //                std::cout << "[Video] Frame TS: " << static_cast<double>(mLastFrame.timestamp)/1e9 << " sec" << std::endl;
-                //                double dT = static_cast<double>(mLastFrame.timestamp-last_ts)/1e9;
-                //                last_ts = mLastFrame.timestamp;
-                //                std::cout << "[Video] Frame FPS: " << 1./dT << std::endl;
-
-#ifdef SENSORS_MOD_AVAILABLE
-                if(mSensReadyToSync)
-                {
+                // timestamp sync
+                if (mSensReadyToSync) {
                     mSensReadyToSync = false;
-                    mSensPtr->updateTimestampOffset(mLastFrame.timestamp);
+                    mSensPtr->updateTimestampOffset(frame->timestamp);
                 }
-#endif
 
-#ifdef SENSOR_LOG_AVAILABLE
-                // ----> AEC/AGC register logging
-                if(mLogEnable)
-                {
-                    static int frame_count =0;
-
-
-                    if((++frame_count)==mLogFrameSkip)
-                        frame_count = 0;
-
-                    if(frame_count==0)
-                    {
-                        saveLogDataLeft();
-                        saveLogDataRight();
-                    }
-                }
-                // <---- AEC/AGC register logging
-#endif
-
-                mNewFrame=true;
+                // notify
+                frameReadyCv_.notify_one();
+                mNewFrame = true;
             }
+
             mBufMutex.unlock();
 
             mComMutex.lock();
@@ -906,6 +897,14 @@ const Frame& VideoCapture::getLastFrame( uint64_t timeout_msec )
     const std::lock_guard<std::mutex> lock(mBufMutex);
     mNewFrame = false;
     return mLastFrame;
+}
+
+// Get the received image frame data
+std::deque<std::shared_ptr<ImageFrame>> VideoCapture::getImageFrames() {
+    // wait new data
+    std::unique_lock<std::mutex> lock(mBufMutex);
+    frameReadyCv_.wait(lock, [&]() { return !imageFrames_.empty(); });
+    return std::move(imageFrames_);
 }
 
 int VideoCapture::ll_VendorControl(uint8_t *buf, int len, int readMode, bool safe, bool force)

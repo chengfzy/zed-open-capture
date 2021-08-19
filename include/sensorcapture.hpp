@@ -183,7 +183,7 @@ public:
     const data::Imu& getLastIMUData(uint64_t timeout_usec = 1500);
 
     /**
-     * @brief Get the reviced IMU data vector
+     * @brief Get the reviced IMU data queue
      *
      * @return The received IMU data
      *
