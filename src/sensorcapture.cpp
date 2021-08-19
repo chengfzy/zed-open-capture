@@ -467,6 +467,9 @@ void SensorCapture::grabThreadFunc()
         imu->gY = data->gY * GYRO_SCALE;
         imu->gZ = data->gZ * GYRO_SCALE;
         imu->temp = data->imu_temp * TEMP_SCALE;
+        if (imuData_.size() > 1000) {
+            imuData_.pop_front();
+        }
         imuData_.emplace_back(imu);
         imuReadyCv_.notify_one();
         mIMUMutex.unlock();
