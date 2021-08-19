@@ -456,18 +456,19 @@ void SensorCapture::grabThreadFunc()
 
         // ----> IMU data
         mIMUMutex.lock();
-        mLastIMUData.sync = data->frame_sync;
-        mLastIMUData.valid = (data->imu_not_valid != 1) ? (data::Imu::NEW_VAL) : (data::Imu::OLD_VAL);
-        mLastIMUData.timestamp = current_data_ts;
-        mLastIMUData.aX = data->aX * ACC_SCALE;
-        mLastIMUData.aY = data->aY * ACC_SCALE;
-        mLastIMUData.aZ = data->aZ * ACC_SCALE;
-        mLastIMUData.gX = data->gX * GYRO_SCALE;
-        mLastIMUData.gY = data->gY * GYRO_SCALE;
-        mLastIMUData.gZ = data->gZ * GYRO_SCALE;
-        mLastIMUData.temp = data->imu_temp * TEMP_SCALE;
-        mNewIMUData = true;
-        mImuReadyCv.notify_one();
+        auto imu = std::make_shared<data::Imu>();
+        imu->sync = data->frame_sync;
+        imu->valid = (data->imu_not_valid != 1) ? (data::Imu::NEW_VAL) : (data::Imu::OLD_VAL);
+        imu->timestamp = current_data_ts;
+        imu->aX = data->aX * ACC_SCALE;
+        imu->aY = data->aY * ACC_SCALE;
+        imu->aZ = data->aZ * ACC_SCALE;
+        imu->gX = data->gX * GYRO_SCALE;
+        imu->gY = data->gY * GYRO_SCALE;
+        imu->gZ = data->gZ * GYRO_SCALE;
+        imu->temp = data->imu_temp * TEMP_SCALE;
+        imuData_.emplace_back(imu);
+        imuReadyCv_.notify_one();
         mIMUMutex.unlock();
 
         // std::string msg = std::to_string(mLastMAGData.timestamp);
@@ -803,12 +804,11 @@ const data::Imu& SensorCapture::getLastIMUData(uint64_t timeout_usec)
 }
 
 // Get the new reviced IMU data
-data::Imu SensorCapture::getNewImuData() {
+std::deque<std::shared_ptr<data::Imu>> SensorCapture::getImuData() {
     // wait new data
     std::unique_lock<std::mutex> lock(mIMUMutex);
-    mImuReadyCv.wait(lock, [&]() { return mNewIMUData; });
-    mNewIMUData = false;
-    return data::Imu(mLastIMUData);
+    imuReadyCv_.wait(lock, [&]() { return !imuData_.empty(); });
+    return std::move(imuData_);
 }
 
 const data::Magnetometer& SensorCapture::getLastMagnetometerData(uint64_t timeout_usec)
