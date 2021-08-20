@@ -842,6 +842,9 @@ void VideoCapture::grabThreadFunc()
                     imageFrames_.pop_front();
                 }
                 imageFrames_.emplace_back(frame);
+                if (imageFrames_.size() > 100) {
+                    ERROR_OUT(mParams.verbose, "Image data buffer size = " + std::to_string(imageFrames_.size()));
+                }
 
                 // timestamp sync
                 if (mSensReadyToSync) {

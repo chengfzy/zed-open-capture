@@ -325,23 +325,25 @@ void SensorCapture::grabThreadFunc()
     mSysTsQueue.reserve(TS_SHIFT_VAL_COUNT);
     mMcuTsQueue.reserve(TS_SHIFT_VAL_COUNT);
 
+    sendPing();
+
     while (!mStopCapture)
     {
         // ----> Keep data stream alive
         // sending a ping aboutonce per second
         // to keep the streaming alive
-        if(ping_data_count>=400) {
-            ping_data_count=0;
-            sendPing();
-        };
-        ping_data_count++;
+        // if (ping_data_count >= 800) {
+        //     ping_data_count=0;
+        //     sendPing();
+        // };
+        // ping_data_count++;
         // <---- Keep data stream alive
 
         mGrabRunning=true;
 
         // Sensor data request
         usbBuf[1]=usb::REP_ID_SENSOR_DATA;
-        int res = hid_read_timeout( mDevHandle, usbBuf, 64, 2000 );
+        int res = hid_read_timeout(mDevHandle, usbBuf, 64, 2000);
 
         // ----> Data received?
         if( res < static_cast<int>(sizeof(usb::RawData)) )  {
@@ -470,6 +472,9 @@ void SensorCapture::grabThreadFunc()
         if (imuData_.size() > 1000) {
             ERROR_OUT(mVerbose, "IMU data buffer is full");
             imuData_.pop_front();
+        }
+        if (imuData_.size() > 100) {
+            ERROR_OUT(mVerbose, "IMU data buffer size = " + std::to_string(imuData_.size()));
         }
         imuData_.emplace_back(imu);
         imuReadyCv_.notify_one();
