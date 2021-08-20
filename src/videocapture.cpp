@@ -838,7 +838,7 @@ void VideoCapture::grabThreadFunc()
                 frameId_++;
                 // pop old data to keep queue size
                 if (imageFrames_.size() > 100) {
-                    ERROR_OUT(1, "image frame buffer is full");
+                    ERROR_OUT(mParams.verbose, "image frame buffer is full");
                     imageFrames_.pop_front();
                 }
                 imageFrames_.emplace_back(frame);
