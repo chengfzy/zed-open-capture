@@ -468,7 +468,7 @@ void SensorCapture::grabThreadFunc()
         imu->gZ = data->gZ * GYRO_SCALE;
         imu->temp = data->imu_temp * TEMP_SCALE;
         if (imuData_.size() > 1000) {
-            ERROR_OUT(1, "IMU data buffer is full");
+            ERROR_OUT(mVerbose, "IMU data buffer is full");
             imuData_.pop_front();
         }
         imuData_.emplace_back(imu);
