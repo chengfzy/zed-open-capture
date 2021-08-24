@@ -175,13 +175,6 @@ public:
      */
     int getSerialNumber();
 
-    /*!
-     * \brief Get the last received IMU data
-     * \param timeout_usec data grabbing timeout in milliseconds.
-     * \return returns a reference to the last received data.
-     */
-    const data::Imu& getLastIMUData(uint64_t timeout_usec = 1500);
-
     /**
      * @brief Get the reviced IMU data queue
      *
@@ -189,27 +182,6 @@ public:
      *
      */
     std::deque<std::shared_ptr<data::Imu>> getImuData();
-
-    /*!
-     * \brief Get the last received Magnetometer data
-     * \param timeout_usec data grabbing timeout in milliseconds.
-     * \return returns a reference to the last received data.
-     */
-    const data::Magnetometer& getLastMagnetometerData(uint64_t timeout_usec=100);
-
-    /*!
-     * \brief Get the last received Environment data
-     * \param timeout_usec data grabbing timeout in milliseconds.
-     * \return returns a reference to the last received data.
-     */
-    const data::Environment& getLastEnvironmentData(uint64_t timeout_usec=100);
-
-    /*!
-     * \brief Get the last received camera sensors temperature data
-     * \param timeout_usec data grabbing timeout in milliseconds.
-     * \return returns a reference to the last received data.
-     */
-    const data::Temperature& getLastCameraTemperatureData(uint64_t timeout_usec=100);
 
     /*!
      * \brief Perform a SW reset of the Sensors Module. To be called in case one of the sensors stops to work correctly.
@@ -260,55 +232,47 @@ private:
 
 private:
     // Flags
-    int mVerbose=0;                //!< Verbose status
-    bool mNewIMUData=false;             //!< Indicates if new  IMU data are available
-    bool mNewMagData=false;             //!< Indicates if new  MAG data are available
-    bool mNewEnvData=false;             //!< Indicates if new  ENV data are available
-    bool mNewCamTempData=false;         //!< Indicates if new  CAM_TEMP data are available
+  int mVerbose = 0;  //!< Verbose status
 
-    bool mInitialized = false;          //!< Inficates if the MCU has been initialized
-    bool mStopCapture = false;          //!< Indicates if the grabbing thread must be stopped
-    bool mGrabRunning = false;          //!< Indicates if the grabbing thread is running
+  bool mInitialized = false;  //!< Inficates if the MCU has been initialized
+  bool mStopCapture = false;  //!< Indicates if the grabbing thread must be stopped
+  bool mGrabRunning = false;  //!< Indicates if the grabbing thread is running
 
-    std::map<int,uint16_t> mSlDevPid;   //!< All the available Stereolabs MCU (ZED-M and ZED2) product IDs associated to their serial number
-    std::map<int,uint16_t> mSlDevFwVer; //!< All the available Stereolabs MCU (ZED-M and ZED2) product IDs associated to their firmware version
+  std::map<int, uint16_t>
+      mSlDevPid;  //!< All the available Stereolabs MCU (ZED-M and ZED2) product IDs associated to their serial number
+  std::map<int, uint16_t> mSlDevFwVer;  //!< All the available Stereolabs MCU (ZED-M and ZED2) product IDs associated to
+                                        //!< their firmware version
 
-    hid_device* mDevHandle = nullptr;   //!< Hidapi device handler
-    int mDevSerial = -1;                //!< Serial number of the connected device
-    int mDevFwVer = -1;                 //!< FW version of the connected device
-    unsigned short mDevPid = 0;         //!< Product ID of the connected device
+  hid_device* mDevHandle = nullptr;  //!< Hidapi device handler
+  int mDevSerial = -1;               //!< Serial number of the connected device
+  int mDevFwVer = -1;                //!< FW version of the connected device
+  unsigned short mDevPid = 0;        //!< Product ID of the connected device
 
-    data::Imu mLastIMUData;             //!< Contains the last received IMU data
-    data::Magnetometer mLastMagData;    //!< Contains the last received Magnetometer data
-    data::Environment mLastEnvData;     //!< Contains the last received Environmental data
-    data::Temperature mLastCamTempData; //!< Contains the last received camera sensors temperature data
+  std::deque<std::shared_ptr<data::Imu>> mImuData;  // received IMU data(not processed yet)
+  std::condition_variable mImuReadyCv;              // condition variable to indict the IMU data is ready
+  std::mutex mImuMutex;                             // mutex for safe access to IMU data buffer
 
-    std::deque<std::shared_ptr<data::Imu>> imuData_;  // received IMU data
-    std::condition_variable imuReadyCv_;              // condition variable to indict the IMU data is ready
+  std::thread mGrabThread;  //!< The grabbing thread
 
-    std::thread mGrabThread;            //!< The grabbing thread
+  uint64_t mStartSysTs = 0;  //!< Initial System Timestamp, to calculate differences [nsec]
+  uint64_t mLastMcuTs = 0;   //!< MCU Timestamp of the previous data, to calculate relative timestamps [nsec]
 
-    std::mutex mIMUMutex;               //!< Mutex for safe access to IMU data buffer
-    std::mutex mMagMutex;               //!< Mutex for safe access to MAG data buffer
-    std::mutex mEnvMutex;               //!< Mutex for safe access to ENV data buffer
-    std::mutex mCamTempMutex;           //!< Mutex for safe access to CAM_TEMP data buffer
+  bool mFirstImuData = true;  //!< Used to initialize the sensor timestamp start point
 
-    uint64_t mStartSysTs=0;             //!< Initial System Timestamp, to calculate differences [nsec]
-    uint64_t mLastMcuTs=0;              //!< MCU Timestamp of the previous data, to calculate relative timestamps [nsec]
+  // ----> Timestamp synchronization
+  uint64_t mLastFrameSyncCount =
+      0;  //!< Used to estimate sync signal in case we lost the MCU data containing the sync signal
 
-    bool mFirstImuData=true;            //!< Used to initialize the sensor timestamp start point
+  std::vector<uint64_t>
+      mMcuTsQueue;  //!< Queue to keep the latest MCU timestamps to be used to calculate the shift scaling factor
+  std::vector<uint64_t>
+      mSysTsQueue;  //!< Queue to keep the latest UVC timestamps to be used to calculate the shift scaling factor
 
-    // ----> Timestamp synchronization
-    uint64_t mLastFrameSyncCount=0;     //!< Used to estimate sync signal in case we lost the MCU data containing the sync signal
+  double mNTPTsScaling = 1.0;  //!< Timestamp shift scaling factor
+  int mNTPAdjustedCount = 0;   //!< Counter for timestamp shift scaling
 
-    std::vector<uint64_t> mMcuTsQueue;  //!< Queue to keep the latest MCU timestamps to be used to calculate the shift scaling factor
-    std::vector<uint64_t> mSysTsQueue;  //!< Queue to keep the latest UVC timestamps to be used to calculate the shift scaling factor
-
-    double mNTPTsScaling=1.0;           //!< Timestamp shift scaling factor
-    int mNTPAdjustedCount = 0;          //!< Counter for timestamp shift scaling
-
-    int64_t mSyncOffset=0;              //!< Timestamp offset respect to synchronized camera
-    // <---- Timestamp synchronization
+  int64_t mSyncOffset = 0;  //!< Timestamp offset respect to synchronized camera
+                            // <---- Timestamp synchronization
 
 #ifdef VIDEO_MOD_AVAILABLE
     video::VideoCapture* mVideoPtr=nullptr;    //!< Pointer to the synchronized SensorCapture object

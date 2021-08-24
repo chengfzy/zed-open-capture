@@ -29,7 +29,7 @@ endif()
 # Options
 option(BUILD_VIDEO      "Build the ZED Open Capture Video Modules (only for Linux)"   ON)
 option(BUILD_SENSORS    "Build the ZED Open Capture Sensors Modules"                  ON)
-option(BUILD_EXAMPLES   "Build the ZED Open Capture examples"                         ON)
+option(BUILD_EXAMPLES   "Build the ZED Open Capture examples"                         OFF)
 option(DEBUG_CAM_REG    "Add functions to log the values of the registers of camera"  OFF)
 
 ############################################################################

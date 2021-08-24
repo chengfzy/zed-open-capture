@@ -19,18 +19,14 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include "sensorcapture.hpp"
+#include <unistd.h>
+#include <cmath>
+#include <sstream>
 
 #ifdef VIDEO_MOD_AVAILABLE
-
 #include "videocapture.hpp"
 #endif
-
-#include <sstream>
-#include <cmath>              // for round
-#include <unistd.h>           // for usleep, close
-
 namespace sl_oc {
-
 namespace sensors {
 
 SensorCapture::SensorCapture(VERBOSITY verbose_lvl )
@@ -308,15 +304,8 @@ void SensorCapture::grabThreadFunc()
     mStopCapture = false;
     mGrabRunning = false;
 
-    mNewIMUData=false;
-    mNewMagData=false;
-    mNewEnvData=false;
-    mNewCamTempData=false;
-
     // Read sensor data
     unsigned char usbBuf[65];
-
-    int ping_data_count = 0;
 
     mFirstImuData = true;
 
@@ -325,6 +314,7 @@ void SensorCapture::grabThreadFunc()
     mSysTsQueue.reserve(TS_SHIFT_VAL_COUNT);
     mMcuTsQueue.reserve(TS_SHIFT_VAL_COUNT);
 
+    int ping_data_count = 0;
     sendPing();
 
     while (!mStopCapture)
@@ -457,7 +447,7 @@ void SensorCapture::grabThreadFunc()
         // <---- Camera/Sensors Synchronization
 
         // ----> IMU data
-        mIMUMutex.lock();
+        mImuMutex.lock();
         auto imu = std::make_shared<data::Imu>();
         imu->sync = data->frame_sync;
         imu->valid = (data->imu_not_valid != 1) ? (data::Imu::NEW_VAL) : (data::Imu::OLD_VAL);
@@ -469,99 +459,20 @@ void SensorCapture::grabThreadFunc()
         imu->gY = data->gY * GYRO_SCALE;
         imu->gZ = data->gZ * GYRO_SCALE;
         imu->temp = data->imu_temp * TEMP_SCALE;
-        if (imuData_.size() > 1000) {
+        if (mImuData.size() > 1000) {
             ERROR_OUT(mVerbose, "IMU data buffer is full");
-            imuData_.pop_front();
+            mImuData.pop_front();
         }
-        if (imuData_.size() > 100) {
-            ERROR_OUT(mVerbose, "IMU data buffer size = " + std::to_string(imuData_.size()));
+        if (mImuData.size() > 100) {
+            ERROR_OUT(mVerbose, "IMU data buffer size = " + std::to_string(mImuData.size()));
         }
-        imuData_.emplace_back(imu);
-        imuReadyCv_.notify_one();
-        mIMUMutex.unlock();
+        mImuData.emplace_back(imu);
+        mImuReadyCv.notify_one();
+        mImuMutex.unlock();
 
         // std::string msg = std::to_string(mLastMAGData.timestamp);
         // INFO_OUT(msg);
         // <---- IMU data
-
-        // ----> Magnetometer data
-        if (data->mag_valid == data::Magnetometer::NEW_VAL) {
-            mMagMutex.lock();
-            mLastMagData.valid = data::Magnetometer::NEW_VAL;
-            mLastMagData.timestamp = current_data_ts;
-            mLastMagData.mY = data->mY*MAG_SCALE;
-            mLastMagData.mZ = data->mZ*MAG_SCALE;
-            mLastMagData.mX = data->mX*MAG_SCALE;
-            mNewMagData = true;
-            mMagMutex.unlock();
-
-            //std::string msg = std::to_string(mLastMAGData.timestamp);
-            //INFO_OUT(msg);
-        } else {
-            if(data->mag_valid==0)
-                mLastMagData.valid = data::Magnetometer::NOT_PRESENT;
-            else if(data->mag_valid==1)
-                mLastMagData.valid = data::Magnetometer::OLD_VAL;
-            else
-                mLastMagData.valid = data::Magnetometer::NEW_VAL;
-        }
-        // <---- Magnetometer data
-
-        // ----> Environmental data
-        if(data->env_valid == data::Environment::NEW_VAL)
-        {
-            mEnvMutex.lock();
-            mLastEnvData.valid = data::Environment::NEW_VAL;
-            mLastEnvData.timestamp = current_data_ts;
-            mLastEnvData.temp = data->temp*TEMP_SCALE;
-            if( atLeast(mDevFwVer, ZED_2_FW::FW_3_9))
-            {
-                mLastEnvData.press = data->press*PRESS_SCALE_NEW;
-                mLastEnvData.humid = data->humid*HUMID_SCALE_NEW;
-            }
-            else
-            {
-                mLastEnvData.press = data->press*PRESS_SCALE_OLD;
-                mLastEnvData.humid = data->humid*HUMID_SCALE_OLD;
-            }
-            mNewEnvData = true;
-            mEnvMutex.unlock();
-
-            //std::string msg = std::to_string(mLastENVData.timestamp);
-            //INFO_OUT(msg);
-        }
-        else
-        {
-            if(data->env_valid==0)
-                mLastEnvData.valid = data::Environment::NOT_PRESENT;
-            else if(data->env_valid==1)
-                mLastEnvData.valid = data::Environment::OLD_VAL;
-            else
-                mLastEnvData.valid = data::Environment::NEW_VAL;
-        }
-        // <---- Environmental data
-
-        // ----> Camera sensors temperature data
-        if(data->temp_cam_left != TEMP_NOT_VALID &&
-                data->temp_cam_left != TEMP_NOT_VALID &&
-                data->env_valid == data::Environment::NEW_VAL ) // Sensor temperature is linked to Environmental data acquisition at FW level
-        {
-            mCamTempMutex.lock();
-            mLastCamTempData.valid = data::Temperature::NEW_VAL;
-            mLastCamTempData.timestamp = current_data_ts;
-            mLastCamTempData.temp_left = data->temp_cam_left*TEMP_SCALE;
-            mLastCamTempData.temp_right = data->temp_cam_right*TEMP_SCALE;
-            mNewCamTempData=true;
-            mCamTempMutex.unlock();
-
-            //std::string msg = std::to_string(mLastCamTempData.timestamp);
-            //INFO_OUT(msg);
-        }
-        else
-        {
-            mLastCamTempData.valid = data::Temperature::OLD_VAL;
-        }
-        // <---- Camera sensors temperature data
     }
 
     mGrabRunning = false;
@@ -789,106 +700,13 @@ bool SensorCapture::resetVideoModule(int serial_number)
     return true;
 }
 
-const data::Imu& SensorCapture::getLastIMUData(uint64_t timeout_usec)
-{
-    // ----> Wait for a new frame
-    uint64_t time_count = (timeout_usec<100?100:timeout_usec)/100;
-    while( !mNewIMUData )
-    {
-        if(time_count==0)
-        {
-            if(mLastIMUData.valid!=data::Imu::NOT_PRESENT)
-                mLastIMUData.valid = data::Imu::OLD_VAL;
-            return mLastIMUData;
-        }
-        time_count--;
-        usleep(100);
-    }
-    // <---- Wait for a new frame
-
-    // Get the frame mutex
-    const std::lock_guard<std::mutex> lock(mIMUMutex);
-    mNewIMUData = false;
-    return mLastIMUData;
-}
-
 // Get the new reviced IMU data
 std::deque<std::shared_ptr<data::Imu>> SensorCapture::getImuData() {
     // wait new data
-    std::unique_lock<std::mutex> lock(mIMUMutex);
-    imuReadyCv_.wait(lock, [&]() { return !imuData_.empty(); });
-    return std::move(imuData_);
+    std::unique_lock<std::mutex> lock(mImuMutex);
+    mImuReadyCv.wait(lock, [&]() { return !mImuData.empty(); });
+    return std::move(mImuData);
 }
 
-const data::Magnetometer& SensorCapture::getLastMagnetometerData(uint64_t timeout_usec)
-{
-    // ----> Wait for a new frame
-    uint64_t time_count = (timeout_usec<100?100:timeout_usec)/10;
-    while( !mNewMagData )
-    {
-        if(time_count==0)
-        {
-            if(mLastMagData.valid!=data::Magnetometer::NOT_PRESENT)
-                mLastMagData.valid=data::Magnetometer::OLD_VAL;
-            return mLastMagData;
-        }
-        time_count--;
-        usleep(10);
-    }
-    // <---- Wait for a new frame
-
-    // Get the frame mutex
-    const std::lock_guard<std::mutex> lock(mMagMutex);
-    mNewMagData = false;
-    return mLastMagData;
-}
-
-const data::Environment &SensorCapture::getLastEnvironmentData(uint64_t timeout_usec)
-{
-    // ----> Wait for a new frame
-    uint64_t time_count = (timeout_usec<100?100:timeout_usec)/10;
-    while( !mNewEnvData )
-    {
-        if(time_count==0)
-        {
-            if(mLastEnvData.valid!=data::Environment::NOT_PRESENT)
-                mLastEnvData.valid = data::Environment::OLD_VAL;
-            return mLastEnvData;
-        }
-        time_count--;
-        usleep(10);
-    }
-    // <---- Wait for a new frame
-
-    // Get the frame mutex
-    const std::lock_guard<std::mutex> lock(mEnvMutex);
-    mNewEnvData = false;
-    return mLastEnvData;
-}
-
-const data::Temperature& SensorCapture::getLastCameraTemperatureData(uint64_t timeout_usec)
-{
-    // ----> Wait for a new frame
-    uint64_t time_count = (timeout_usec<100?100:timeout_usec)/10;
-    while( !mNewCamTempData )
-    {
-        if(time_count==0)
-        {
-            if(mLastCamTempData.valid!=data::Temperature::NOT_PRESENT)
-                mLastCamTempData.valid = data::Temperature::OLD_VAL;
-            return mLastCamTempData;
-        }
-        time_count--;
-        usleep(10);
-    }
-    // <---- Wait for a new frame
-
-    // Get the frame mutex
-    const std::lock_guard<std::mutex> lock(mCamTempMutex);
-    mNewCamTempData = false;
-    return mLastCamTempData;
-}
-
-}
-
-}
+}  // namespace sensors
+}  // namespace sl_oc
