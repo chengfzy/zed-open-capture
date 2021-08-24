@@ -387,6 +387,7 @@ void SensorCapture::grabThreadFunc()
 
         // mStartSysTs is synchronized to Video TS when sync is enabled using \ref VideoCapture::enableSensorSync
         uint64_t current_data_ts = (mStartSysTs-mSyncOffset) + rel_mcu_ts;
+        uint64_t systemTimestamp = getWallTimestamp();
 
         // ----> Camera/Sensors Synchronization
         if( data->sync_capabilities != 0 ) // Synchronization active
@@ -452,6 +453,7 @@ void SensorCapture::grabThreadFunc()
         imu->sync = data->frame_sync;
         imu->valid = (data->imu_not_valid != 1) ? (data::Imu::NEW_VAL) : (data::Imu::OLD_VAL);
         imu->timestamp = current_data_ts;
+        imu->systemTimestamp = systemTimestamp;
         imu->aX = data->aX * ACC_SCALE;
         imu->aY = data->aY * ACC_SCALE;
         imu->aZ = data->aZ * ACC_SCALE;

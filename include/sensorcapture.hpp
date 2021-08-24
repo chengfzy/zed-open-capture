@@ -50,25 +50,21 @@ namespace data {
 /*!
  * \brief Contains the acquired Imu data
  */
-struct SL_OC_EXPORT Imu
-{
+struct SL_OC_EXPORT Imu {
     // Validity of the magnetometer sensor data
-    typedef enum _imu_status {
-        NOT_PRESENT = 0,
-        OLD_VAL = 1,
-        NEW_VAL = 2
-    } ImuStatus;
+    typedef enum _imu_status { NOT_PRESENT = 0, OLD_VAL = 1, NEW_VAL = 2 } ImuStatus;
 
-    ImuStatus valid = NOT_PRESENT;     //!< Indicates if IMU data are valid
-    uint64_t timestamp = 0; //!< Timestamp in nanoseconds
-    float aX;               //!< Acceleration along X axis in m/s²
-    float aY;               //!< Acceleration along Y axis in m/s²
-    float aZ;               //!< Acceleration along Z axis in m/s²
-    float gX;               //!< Angular velocity around X axis in °/s
-    float gY;               //!< Angular velocity around Y axis in °/s
-    float gZ;               //!< Angular velocity around > axis in °/s
-    float temp;             //!< Sensor temperature in °C
-    bool sync;              //!< Indicates in IMU data are synchronized with a video frame
+    ImuStatus valid = NOT_PRESENT;  //!< Indicates if IMU data are valid
+    uint64_t timestamp = 0;         //!< Timestamp in nanoseconds
+    uint64_t systemTimestamp = 0;   //!< System timestamp in nanoseconds
+    float aX;                       //!< Acceleration along X axis in m/s²
+    float aY;                       //!< Acceleration along Y axis in m/s²
+    float aZ;                       //!< Acceleration along Z axis in m/s²
+    float gX;                       //!< Angular velocity around X axis in °/s
+    float gY;                       //!< Angular velocity around Y axis in °/s
+    float gZ;                       //!< Angular velocity around > axis in °/s
+    float temp;                     //!< Sensor temperature in °C
+    bool sync;                      //!< Indicates in IMU data are synchronized with a video frame
 };
 
 /*!
@@ -248,31 +244,26 @@ private:
   int mDevFwVer = -1;                //!< FW version of the connected device
   unsigned short mDevPid = 0;        //!< Product ID of the connected device
 
+  std::thread mGrabThread;  //!< The grabbing thread
+
   std::deque<std::shared_ptr<data::Imu>> mImuData;  // received IMU data(not processed yet)
   std::condition_variable mImuReadyCv;              // condition variable to indict the IMU data is ready
   std::mutex mImuMutex;                             // mutex for safe access to IMU data buffer
 
-  std::thread mGrabThread;  //!< The grabbing thread
-
+  bool mFirstImuData = true;  //!< Used to initialize the sensor timestamp start point
   uint64_t mStartSysTs = 0;  //!< Initial System Timestamp, to calculate differences [nsec]
   uint64_t mLastMcuTs = 0;   //!< MCU Timestamp of the previous data, to calculate relative timestamps [nsec]
 
-  bool mFirstImuData = true;  //!< Used to initialize the sensor timestamp start point
-
   // ----> Timestamp synchronization
-  uint64_t mLastFrameSyncCount =
-      0;  //!< Used to estimate sync signal in case we lost the MCU data containing the sync signal
-
-  std::vector<uint64_t>
-      mMcuTsQueue;  //!< Queue to keep the latest MCU timestamps to be used to calculate the shift scaling factor
-  std::vector<uint64_t>
-      mSysTsQueue;  //!< Queue to keep the latest UVC timestamps to be used to calculate the shift scaling factor
-
+  //!< Used to estimate sync signal in case we lost the MCU data containing the sync signal
+  uint64_t mLastFrameSyncCount = 0;
+  //!< Queue to keep the latest MCU timestamps to be used to calculate the shift scaling factor
+  std::vector<uint64_t> mMcuTsQueue;
+  //!< Queue to keep the latest UVC timestamps to be used to calculate the shift scaling factor
+  std::vector<uint64_t> mSysTsQueue;
   double mNTPTsScaling = 1.0;  //!< Timestamp shift scaling factor
   int mNTPAdjustedCount = 0;   //!< Counter for timestamp shift scaling
-
-  int64_t mSyncOffset = 0;  //!< Timestamp offset respect to synchronized camera
-                            // <---- Timestamp synchronization
+  int64_t mSyncOffset = 0;     //!< Timestamp offset respect to synchronized camera
 
 #ifdef VIDEO_MOD_AVAILABLE
     video::VideoCapture* mVideoPtr=nullptr;    //!< Pointer to the synchronized SensorCapture object

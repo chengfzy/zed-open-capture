@@ -801,6 +801,7 @@ void VideoCapture::grabThreadFunc()
             // get buffer timestamp in us
 
             uint64_t ts_uvc = ((uint64_t) buf.timestamp.tv_sec) * (1000 * 1000) + ((uint64_t) buf.timestamp.tv_usec);
+            uint64_t systemTimestamp = getWallTimestamp();
 
             if(mFirstFrame)
             {
@@ -832,6 +833,7 @@ void VideoCapture::grabThreadFunc()
                 frame->height = mHeight;
                 frame->channels = mChannels;
                 frame->timestamp = mStartTs + rel_ts;
+                frame->systemTimestamp = systemTimestamp;
                 frame->data.resize(mBuffers[mCurrentIndex].length);
                 memcpy(frame->data.data(), (unsigned char*)mBuffers[mCurrentIndex].start,
                        mBuffers[mCurrentIndex].length);

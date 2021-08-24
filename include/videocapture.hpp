@@ -65,12 +65,13 @@ struct SL_OC_EXPORT Frame
  *
  */
 struct SL_OC_EXPORT ImageFrame {
-    uint64_t frame_id = 0;      //!< Increasing index of frames
-    uint64_t timestamp = 0;     //!< Timestamp in nanoseconds
-    std::vector<uint8_t> data;  //!< Frame data in YUV 4:2:2 format
-    uint16_t width = 0;         //!< Frame width
-    uint16_t height = 0;        //!< Frame height
-    uint8_t channels = 0;       //!< Number of channels per pixel
+    uint64_t frame_id = 0;         //!< Increasing index of frames
+    uint64_t timestamp = 0;        //!< Timestamp in nanoseconds
+    uint64_t systemTimestamp = 0;  //!< System timestamp in nanoseconds
+    std::vector<uint8_t> data;     //!< Frame data in YUV 4:2:2 format
+    uint16_t width = 0;            //!< Frame width
+    uint16_t height = 0;           //!< Frame height
+    uint8_t channels = 0;          //!< Number of channels per pixel
 };
 
 /*!
