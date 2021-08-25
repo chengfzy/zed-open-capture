@@ -832,7 +832,8 @@ void VideoCapture::grabThreadFunc()
                 frame->width = mWidth;
                 frame->height = mHeight;
                 frame->channels = mChannels;
-                frame->timestamp = mStartTs + rel_ts;
+                frame->sensorTimestamp = mStartTs + rel_ts;
+                frame->timestamp = frame->sensorTimestamp + mCameraSystemOffset;
                 frame->systemTimestamp = systemTimestamp;
                 frame->data.resize(mBuffers[mCurrentIndex].length);
                 memcpy(frame->data.data(), (unsigned char*)mBuffers[mCurrentIndex].start,

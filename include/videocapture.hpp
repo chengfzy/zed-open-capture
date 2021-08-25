@@ -66,7 +66,8 @@ struct SL_OC_EXPORT Frame
  */
 struct SL_OC_EXPORT ImageFrame {
     uint64_t frame_id = 0;         //!< Increasing index of frames
-    uint64_t timestamp = 0;        //!< Timestamp in nanoseconds
+    uint64_t timestamp = 0;        //!< Timestamp in nanoseconds, = sensorTimestamp + Offset
+    uint64_t sensorTimestamp = 0;  //!< Sensor timestamp in nanoseconds
     uint64_t systemTimestamp = 0;  //!< System timestamp in nanoseconds
     std::vector<uint8_t> data;     //!< Frame data in YUV 4:2:2 format
     uint16_t width = 0;            //!< Frame width
@@ -406,6 +407,13 @@ public:
      *        be synchronized to the last Sensor Data
      */
     inline void setReadyToSync(){ mSensReadyToSync=true; }
+
+    /**
+     * @brief Set the offset between camera and system
+     *
+     * @param offset The offset between camera and system
+     */
+    inline void setCameraSystemOffset(const int64_t& offset) { mCameraSystemOffset = offset; }
 #endif
 
         bool resetAGCAECregisters();
@@ -539,6 +547,7 @@ private:
     // <---- Registers logging
 #endif
 
+    int64_t mCameraSystemOffset = 0;  // the offset between sensor timestamp and system timestamp
 
 #ifdef SENSORS_MOD_AVAILABLE
     bool mSyncEnabled=false;            //!< Indicates if a  SensorCapture object is synchronized

@@ -56,8 +56,8 @@ struct SL_OC_EXPORT Imu {
 
     ImuStatus valid = NOT_PRESENT;  //!< Indicates if IMU data are valid
     uint64_t timestamp = 0;         //!< Timestamp in nanoseconds, = sensorTimestamp + Offset
-    uint64_t systemTimestamp = 0;   //!< System timestamp in nanoseconds
     uint64_t sensorTimestamp = 0;   //!< Sensor timestamp in nanoseconds
+    uint64_t systemTimestamp = 0;   //!< System timestamp in nanoseconds
     float aX;                       //!< Acceleration along X axis in m/s²
     float aY;                       //!< Acceleration along Y axis in m/s²
     float aZ;                       //!< Acceleration along Z axis in m/s²

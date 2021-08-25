@@ -361,6 +361,7 @@ void SensorCapture::grabThreadFunc()
 
         // Data structure static conversion
         usb::RawData* data = (usb::RawData*)usbBuf;
+        uint64_t systemTimestamp = getWallTimestamp();
 
         // ----> Timestamp update
         uint64_t mcu_ts_nsec = static_cast<uint64_t>(std::round(static_cast<float>(data->timestamp)*TS_SCALE));
@@ -386,8 +387,7 @@ void SensorCapture::grabThreadFunc()
         rel_mcu_ts +=  static_cast<uint64_t>(static_cast<double>(delta_mcu_ts_raw)*mNTPTsScaling);
 
         // mStartSysTs is synchronized to Video TS when sync is enabled using \ref VideoCapture::enableSensorSync
-        uint64_t current_data_ts = (mStartSysTs-mSyncOffset) + rel_mcu_ts;
-        uint64_t systemTimestamp = getWallTimestamp();
+        uint64_t current_data_ts = (mStartSysTs - mSyncOffset) + rel_mcu_ts;
 
         // ----> Camera/Sensors Synchronization
         if( data->sync_capabilities != 0 ) // Synchronization active
@@ -480,7 +480,9 @@ void SensorCapture::grabThreadFunc()
             mSensorTimestamps.emplace_back(current_data_ts);
             mSystemTimestamps.emplace_back(systemTimestamp);
             updateSensorSystemOffset();
-            if (!mImuSystemSynced) {
+            if (mImuSystemSynced) {
+                mVideoPtr->setCameraSystemOffset(mImuSystemSynced);
+            } else {
                 int64_t dt =
                     static_cast<int64_t>(systemTimestamp) - static_cast<int64_t>(current_data_ts + mImuSystemOffset);
                 if (std::abs(dt) < 10000000) {  // 10 ms
