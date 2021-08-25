@@ -447,30 +447,32 @@ void SensorCapture::grabThreadFunc()
         mLastFrameSyncCount = data->frame_sync_count;
         // <---- Camera/Sensors Synchronization
 
-        // ----> IMU data
-        mImuMutex.lock();
-        auto imu = std::make_shared<data::Imu>();
-        imu->sync = data->frame_sync;
-        imu->valid = (data->imu_not_valid != 1) ? (data::Imu::NEW_VAL) : (data::Imu::OLD_VAL);
-        imu->timestamp = current_data_ts;
-        imu->systemTimestamp = systemTimestamp;
-        imu->aX = data->aX * ACC_SCALE;
-        imu->aY = data->aY * ACC_SCALE;
-        imu->aZ = data->aZ * ACC_SCALE;
-        imu->gX = data->gX * GYRO_SCALE;
-        imu->gY = data->gY * GYRO_SCALE;
-        imu->gZ = data->gZ * GYRO_SCALE;
-        imu->temp = data->imu_temp * TEMP_SCALE;
-        if (mImuData.size() > 1000) {
-            ERROR_OUT(mVerbose, "IMU data buffer is full");
-            mImuData.pop_front();
+        // ----> IMU data, only add data if synchronized with camera
+        if (mHasSynced || !mVideoPtr) {
+            mImuMutex.lock();
+            auto imu = std::make_shared<data::Imu>();
+            imu->sync = data->frame_sync;
+            imu->valid = (data->imu_not_valid != 1) ? (data::Imu::NEW_VAL) : (data::Imu::OLD_VAL);
+            imu->timestamp = current_data_ts;
+            imu->systemTimestamp = systemTimestamp;
+            imu->aX = data->aX * ACC_SCALE;
+            imu->aY = data->aY * ACC_SCALE;
+            imu->aZ = data->aZ * ACC_SCALE;
+            imu->gX = data->gX * GYRO_SCALE;
+            imu->gY = data->gY * GYRO_SCALE;
+            imu->gZ = data->gZ * GYRO_SCALE;
+            imu->temp = data->imu_temp * TEMP_SCALE;
+            if (mImuData.size() > 1000) {
+                ERROR_OUT(mVerbose, "IMU data buffer is full");
+                mImuData.pop_front();
+            }
+            if (mImuData.size() > 100) {
+                ERROR_OUT(mVerbose, "IMU data buffer size = " + std::to_string(mImuData.size()));
+            }
+            mImuData.emplace_back(imu);
+            mImuReadyCv.notify_one();
+            mImuMutex.unlock();
         }
-        if (mImuData.size() > 100) {
-            ERROR_OUT(mVerbose, "IMU data buffer size = " + std::to_string(mImuData.size()));
-        }
-        mImuData.emplace_back(imu);
-        mImuReadyCv.notify_one();
-        mImuMutex.unlock();
 
         // std::string msg = std::to_string(mLastMAGData.timestamp);
         // INFO_OUT(msg);
@@ -492,6 +494,13 @@ void SensorCapture::updateTimestampOffset( uint64_t frame_ts)
     {
         int64_t offset = offset_sum/count;
         mSyncOffset += offset;
+
+        // set flag, has synchronized with camera
+        if (!mHasSynced) {
+            std::cout << "IMU and camera has been synchronized" << std::endl;
+            mHasSynced = true;
+        }
+
 #if 0
         std::cout << "Offset: " << offset << std::endl;
         std::cout << "mSyncOffset: " << mSyncOffset << std::endl;

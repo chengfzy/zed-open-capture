@@ -268,6 +268,7 @@ private:
 #ifdef VIDEO_MOD_AVAILABLE
     video::VideoCapture* mVideoPtr=nullptr;    //!< Pointer to the synchronized SensorCapture object
     uint64_t mSyncTs=0;                 //!< Timestamp of the latest received HW sync signal
+    bool mHasSynced = false;            // flag indict the IMU and camera has been synchronized
 #endif
 
 };
