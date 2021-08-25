@@ -481,6 +481,7 @@ void SensorCapture::grabThreadFunc()
             mSystemTimestamps.emplace_back(systemTimestamp);
             updateSensorSystemOffset();
             if (mImuSystemSynced) {
+                // update offset to camera
                 mVideoPtr->setCameraSystemOffset(mImuSystemSynced);
             } else {
                 int64_t dt =
@@ -488,6 +489,9 @@ void SensorCapture::grabThreadFunc()
                 if (std::abs(dt) < 10000000) {  // 10 ms
                     std::cout << "IMU and system has been synchronized" << std::endl;
                     mImuSystemSynced = true;
+                    // update camera sync flag
+                    mVideoPtr->setCameraSystemOffset(mImuSystemOffset);
+                    mVideoPtr->setCameraSystemSynced();
                 }
             }
 

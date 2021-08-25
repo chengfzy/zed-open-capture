@@ -414,6 +414,13 @@ public:
      * @param offset The offset between camera and system
      */
     inline void setCameraSystemOffset(const int64_t& offset) { mCameraSystemOffset = offset; }
+
+    /**
+     * @brief Set the camera and system are synchronized
+     *
+     * @param synced True for camera and system are synchronized
+     */
+    inline void setCameraSystemSynced(bool synced = true) { mCameraSystemSynced = synced; }
 #endif
 
         bool resetAGCAECregisters();
@@ -548,6 +555,7 @@ private:
 #endif
 
     int64_t mCameraSystemOffset = 0;  // the offset between sensor timestamp and system timestamp
+    bool mCameraSystemSynced = false;  // flag indict the camera and system has been synchronized
 
 #ifdef SENSORS_MOD_AVAILABLE
     bool mSyncEnabled=false;            //!< Indicates if a  SensorCapture object is synchronized

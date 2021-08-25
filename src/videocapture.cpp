@@ -826,33 +826,33 @@ void VideoCapture::grabThreadFunc()
 
             mBufMutex.lock();
             if (mWidth != 0 && mHeight != 0 && mBuffers[mCurrentIndex].start != nullptr) {
+                uint64_t sensorTimestamp = mStartTs + rel_ts;
+
                 // assign frame
-                auto frame = std::make_shared<ImageFrame>();
-                frame->frame_id = frameId_++;
-                frame->width = mWidth;
-                frame->height = mHeight;
-                frame->channels = mChannels;
-                frame->sensorTimestamp = mStartTs + rel_ts;
-                frame->timestamp = frame->sensorTimestamp + mCameraSystemOffset;
-                frame->systemTimestamp = systemTimestamp;
-                frame->data.resize(mBuffers[mCurrentIndex].length);
-                memcpy(frame->data.data(), (unsigned char*)mBuffers[mCurrentIndex].start,
-                       mBuffers[mCurrentIndex].length);
-                frameId_++;
-                // pop old data to keep queue size
-                if (imageFrames_.size() > 100) {
-                    ERROR_OUT(mParams.verbose, "image frame buffer is full");
-                    imageFrames_.pop_front();
-                }
-                imageFrames_.emplace_back(frame);
-                if (imageFrames_.size() > 100) {
-                    ERROR_OUT(mParams.verbose, "Image data buffer size = " + std::to_string(imageFrames_.size()));
+                if (mCameraSystemSynced) {
+                    auto frame = std::make_shared<ImageFrame>();
+                    frame->frame_id = frameId_++;
+                    frame->width = mWidth;
+                    frame->height = mHeight;
+                    frame->channels = mChannels;
+                    frame->sensorTimestamp = sensorTimestamp;
+                    frame->timestamp = sensorTimestamp + mCameraSystemOffset;
+                    frame->systemTimestamp = systemTimestamp;
+                    frame->data.resize(mBuffers[mCurrentIndex].length);
+                    memcpy(frame->data.data(), (unsigned char*)mBuffers[mCurrentIndex].start,
+                           mBuffers[mCurrentIndex].length);
+                    // pop old data to keep queue size
+                    if (imageFrames_.size() > 100) {
+                        ERROR_OUT(mParams.verbose, "image frame buffer is full");
+                        imageFrames_.pop_front();
+                    }
+                    imageFrames_.emplace_back(frame);
                 }
 
                 // timestamp sync
                 if (mSensReadyToSync) {
                     mSensReadyToSync = false;
-                    mSensPtr->updateTimestampOffset(frame->timestamp);
+                    mSensPtr->updateTimestampOffset(sensorTimestamp);
                 }
 
                 // notify
