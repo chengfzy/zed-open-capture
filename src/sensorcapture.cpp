@@ -314,7 +314,7 @@ void SensorCapture::grabThreadFunc()
     mSysTsQueue.reserve(TS_SHIFT_VAL_COUNT);
     mMcuTsQueue.reserve(TS_SHIFT_VAL_COUNT);
 
-    int ping_data_count = 0;
+    // int ping_data_count = 0;
     sendPing();
 
     while (!mStopCapture)
@@ -448,35 +448,57 @@ void SensorCapture::grabThreadFunc()
         // <---- Camera/Sensors Synchronization
 
         // ----> IMU data, only add data if synchronized with camera
-        if (mHasSynced || !mVideoPtr) {
-            mImuMutex.lock();
-            auto imu = std::make_shared<data::Imu>();
-            imu->sync = data->frame_sync;
-            imu->valid = (data->imu_not_valid != 1) ? (data::Imu::NEW_VAL) : (data::Imu::OLD_VAL);
-            imu->timestamp = current_data_ts;
-            imu->systemTimestamp = systemTimestamp;
-            imu->aX = data->aX * ACC_SCALE;
-            imu->aY = data->aY * ACC_SCALE;
-            imu->aZ = data->aZ * ACC_SCALE;
-            imu->gX = data->gX * GYRO_SCALE;
-            imu->gY = data->gY * GYRO_SCALE;
-            imu->gZ = data->gZ * GYRO_SCALE;
-            imu->temp = data->imu_temp * TEMP_SCALE;
-            if (mImuData.size() > 1000) {
-                ERROR_OUT(mVerbose, "IMU data buffer is full");
-                mImuData.pop_front();
+        if (mImuCameraSynced) {
+            if (mImuSystemSynced) {
+                mImuMutex.lock();
+                auto imu = std::make_shared<data::Imu>();
+                imu->sync = data->frame_sync;
+                imu->valid = (data->imu_not_valid != 1) ? (data::Imu::NEW_VAL) : (data::Imu::OLD_VAL);
+                imu->timestamp = current_data_ts + mImuSystemOffset;
+                imu->sensorTimestamp = current_data_ts;
+                imu->systemTimestamp = systemTimestamp;
+                imu->aX = data->aX * ACC_SCALE;
+                imu->aY = data->aY * ACC_SCALE;
+                imu->aZ = data->aZ * ACC_SCALE;
+                imu->gX = data->gX * GYRO_SCALE;
+                imu->gY = data->gY * GYRO_SCALE;
+                imu->gZ = data->gZ * GYRO_SCALE;
+                imu->temp = data->imu_temp * TEMP_SCALE;
+                if (mImuData.size() > 1000) {
+                    ERROR_OUT(mVerbose, "IMU data buffer is full");
+                    mImuData.pop_front();
+                }
+                if (mImuData.size() > 300) {
+                    ERROR_OUT(mVerbose, "IMU data buffer size = " + std::to_string(mImuData.size()));
+                }
+                mImuData.emplace_back(imu);
+                mImuReadyCv.notify_one();
+                mImuMutex.unlock();
             }
-            if (mImuData.size() > 100) {
-                ERROR_OUT(mVerbose, "IMU data buffer size = " + std::to_string(mImuData.size()));
-            }
-            mImuData.emplace_back(imu);
-            mImuReadyCv.notify_one();
-            mImuMutex.unlock();
-        }
 
-        // std::string msg = std::to_string(mLastMAGData.timestamp);
-        // INFO_OUT(msg);
-        // <---- IMU data
+            // syncronization between sensor and system
+            mSensorTimestamps.emplace_back(current_data_ts);
+            mSystemTimestamps.emplace_back(systemTimestamp);
+            updateSensorSystemOffset();
+            if (!mImuSystemSynced) {
+                int64_t dt =
+                    static_cast<int64_t>(systemTimestamp) - static_cast<int64_t>(current_data_ts + mImuSystemOffset);
+                if (std::abs(dt) < 10000000) {  // 10 ms
+                    std::cout << "IMU and system has been synchronized" << std::endl;
+                    mImuSystemSynced = true;
+                }
+            }
+
+#if 0
+            // print for debug
+            int64_t dt1 = static_cast<int64_t>(systemTimestamp) - static_cast<int64_t>(current_data_ts);
+            int64_t dt2 =
+                static_cast<int64_t>(systemTimestamp) - static_cast<int64_t>(current_data_ts + mImuSystemOffset);
+            std::cout << "current_data_ts = " << current_data_ts << ", systemTimestamp = " << systemTimestamp
+                      << ", mSensorSystemOffset = " << mImuSystemOffset << ", dt1 = " << dt1 << ", dt2 = " << dt2
+                      << std::endl;
+#endif
+        }
     }
 
     mGrabRunning = false;
@@ -495,10 +517,10 @@ void SensorCapture::updateTimestampOffset( uint64_t frame_ts)
         int64_t offset = offset_sum/count;
         mSyncOffset += offset;
 
-        // set flag, has synchronized with camera
-        if (!mHasSynced) {
+        // set flag when IMU is synchronized with camera
+        if (!mImuCameraSynced) {
             std::cout << "IMU and camera has been synchronized" << std::endl;
-            mHasSynced = true;
+            mImuCameraSynced = true;
         }
 
 #if 0
@@ -511,6 +533,32 @@ void SensorCapture::updateTimestampOffset( uint64_t frame_ts)
     }
 }
 #endif
+
+// Update the offset between sensor timestamp and system timestamp(PC)
+void SensorCapture::updateSensorSystemOffset() {
+    constexpr int kMinSize{10000};
+    if (mSensorTimestamps.size() == kMinSize) {
+        // calculate offset for the first time
+        int64_t offset{0};
+        for (size_t i = 0; i < mSensorTimestamps.size(); ++i) {
+            offset += static_cast<int64_t>(mSystemTimestamps[i]) - static_cast<int64_t>(mSensorTimestamps[i]);
+        }
+        offset /= static_cast<int>(mSensorTimestamps.size());
+        mImuSystemOffset = offset;
+        std::cout << "first update offset, mSensorSystemOffset = " << mImuSystemOffset << std::endl;
+    } else if (mSensorTimestamps.size() > kMinSize) {
+        // continue, incremental calculation
+        int64_t incrementOffset =
+            static_cast<int64_t>(mSystemTimestamps[kMinSize]) - static_cast<int64_t>(mSensorTimestamps[kMinSize]) -
+            static_cast<int64_t>(mSystemTimestamps[0]) + static_cast<int64_t>(mSensorTimestamps[0]);
+        mImuSystemOffset += incrementOffset / kMinSize;
+        // std::cout << "update offset, mSensorSystemOffset = " << mSensorSystemOffset << std::endl;
+
+        // drop oldest data
+        mSensorTimestamps.pop_front();
+        mSystemTimestamps.pop_front();
+    }
+}
 
 bool SensorCapture::sendPing() {
     if( !mDevHandle )

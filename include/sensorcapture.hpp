@@ -55,8 +55,9 @@ struct SL_OC_EXPORT Imu {
     typedef enum _imu_status { NOT_PRESENT = 0, OLD_VAL = 1, NEW_VAL = 2 } ImuStatus;
 
     ImuStatus valid = NOT_PRESENT;  //!< Indicates if IMU data are valid
-    uint64_t timestamp = 0;         //!< Timestamp in nanoseconds
+    uint64_t timestamp = 0;         //!< Timestamp in nanoseconds, = sensorTimestamp + Offset
     uint64_t systemTimestamp = 0;   //!< System timestamp in nanoseconds
+    uint64_t sensorTimestamp = 0;   //!< Sensor timestamp in nanoseconds
     float aX;                       //!< Acceleration along X axis in m/s²
     float aY;                       //!< Acceleration along Y axis in m/s²
     float aZ;                       //!< Acceleration along Z axis in m/s²
@@ -208,7 +209,13 @@ public:
     inline void setVideoPtr(video::VideoCapture* videoPtr){mVideoPtr=videoPtr;}    //!< Called by  VideoCapture to set the pointer to it
 #endif
 
-private:
+    /**
+     * @brief Update the offset between sensor timestamp and system timestamp(PC)
+     *
+     */
+    void updateSensorSystemOffset();
+
+  private:
     static bool searchForConnectedDev(int* serial_number, unsigned short* found_pid); //!< Search for a device and returns its pid and serial number
 
     void grabThreadFunc();              //!< The sensor data grabbing thread function
@@ -265,10 +272,16 @@ private:
   int mNTPAdjustedCount = 0;   //!< Counter for timestamp shift scaling
   int64_t mSyncOffset = 0;     //!< Timestamp offset respect to synchronized camera
 
+  // synchronization between sensor and system(PC)
+  int64_t mImuSystemOffset = 0;  // the offset between sensor timestamp and system timestamp
+  std::deque<uint64_t> mSensorTimestamps;
+  std::deque<uint64_t> mSystemTimestamps;
+
 #ifdef VIDEO_MOD_AVAILABLE
-    video::VideoCapture* mVideoPtr=nullptr;    //!< Pointer to the synchronized SensorCapture object
-    uint64_t mSyncTs=0;                 //!< Timestamp of the latest received HW sync signal
-    bool mHasSynced = false;            // flag indict the IMU and camera has been synchronized
+  video::VideoCapture* mVideoPtr = nullptr;  //!< Pointer to the synchronized SensorCapture object
+  uint64_t mSyncTs = 0;                      //!< Timestamp of the latest received HW sync signal
+  bool mImuCameraSynced = false;             // flag indict the IMU and camera has been synchronized
+  bool mImuSystemSynced = false;             // flag indict the IMU and system has been synchronized
 #endif
 
 };
