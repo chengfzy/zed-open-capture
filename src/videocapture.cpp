@@ -835,12 +835,16 @@ void VideoCapture::grabThreadFunc()
                     frame->width = mWidth;
                     frame->height = mHeight;
                     frame->channels = mChannels;
-                    frame->sensorTimestamp = sensorTimestamp;
                     frame->timestamp = sensorTimestamp + mCameraSystemOffset;
+                    frame->sensorTimestamp = sensorTimestamp;
                     frame->systemTimestamp = systemTimestamp;
                     frame->data.resize(mBuffers[mCurrentIndex].length);
                     memcpy(frame->data.data(), (unsigned char*)mBuffers[mCurrentIndex].start,
                            mBuffers[mCurrentIndex].length);
+                    // get and set camera setting info
+                    frame->sharpness = getSharpness();
+                    frame->leftGain = getGain(CAM_SENS_POS::LEFT);
+                    frame->leftExposure = getExposure(CAM_SENS_POS::LEFT);
                     // pop old data to keep queue size
                     if (imageFrames_.size() > 100) {
                         ERROR_OUT(mParams.verbose, "image frame buffer is full");

@@ -73,6 +73,9 @@ struct SL_OC_EXPORT ImageFrame {
     uint16_t width = 0;            //!< Frame width
     uint16_t height = 0;           //!< Frame height
     uint8_t channels = 0;          //!< Number of channels per pixel
+    int sharpness = 0;             // sharpness
+    int leftGain = 0;              // gain
+    int leftExposure = 0;          // exposure
 };
 
 /*!
