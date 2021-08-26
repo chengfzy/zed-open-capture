@@ -422,7 +422,7 @@ void SensorCapture::grabThreadFunc()
                     if (scale > 1.2) scale = 1.2;
                     if (scale < 0.8) scale = 0.8;
 
-                    //Adjust scaling continuoulsy. No jump so that ts(n) - ts(n-1) == 400Hz
+                    // Adjust scaling continuously. No jump so that ts(n) - ts(n-1) == 400Hz
                     mNTPTsScaling*=scale;
 
                     //scale will be applied to the next values, so clear the vector and wait until we have enough data again
@@ -472,8 +472,8 @@ void SensorCapture::grabThreadFunc()
                     ERROR_OUT(mVerbose, "IMU data buffer size = " + std::to_string(mImuData.size()));
                 }
                 mImuData.emplace_back(imu);
-                mImuReadyCv.notify_one();
                 mImuMutex.unlock();
+                mImuReadyCv.notify_one();
             }
 
             // syncronization between sensor and system
@@ -492,6 +492,8 @@ void SensorCapture::grabThreadFunc()
                     // update camera sync flag
                     mVideoPtr->setCameraSystemOffset(mImuSystemOffset);
                     mVideoPtr->setCameraSystemSynced();
+                } else {
+                    std::cout << "IMU and system don't synchronized yet, dt = " << dt << std::endl;
                 }
             }
 
@@ -563,6 +565,9 @@ void SensorCapture::updateSensorSystemOffset() {
         // drop oldest data
         mSensorTimestamps.pop_front();
         mSystemTimestamps.pop_front();
+    } else {
+        // std::cout << "first update offset, mSensorSystemOffset = " << mImuSystemOffset << std::endl;
+        std::cout << "not enough data, current size = " << mSensorTimestamps.size() << std::endl;
     }
 }
 
